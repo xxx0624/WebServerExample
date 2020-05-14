@@ -28,6 +28,37 @@ const int PARSE_REQ_SUCCESS = 0;
 string req_path;
 
 
+bool is_file(string path){
+    for(int i = path.size() - 1; i >= 0; i --){
+        if(path[i] == '/'){
+            return false;
+        }
+        if(path[i] == '.'){
+            return true;
+        }
+    }
+    return false;
+}
+
+int find_delimiter(char* s, int len, int start_pos){
+    for(int i = start_pos; i < len - 1; i ++){
+        if(s[i] == '\r' && s[i + 1] == '\n'){
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool is_get(string data){
+    return data.compare("GET") == 0;
+}
+
+/**
+ * send a message back to client
+ * @param sockFD the sock fd of the the client
+ * @param msg the message
+ * @param msg_len the length of message
+ */
 int _send_msg(int sockFD, char* msg, int msg_len){
     cout << "response size:" << msg_len << endl;
     int nbytes_total = 0;
@@ -106,18 +137,6 @@ char* build_response(string status_code, vector<string> *headers, char* msg, int
     return res;
 }
 
-bool is_file(string path){
-    for(int i = path.size() - 1; i >= 0; i --){
-        if(path[i] == '/'){
-            return false;
-        }
-        if(path[i] == '.'){
-            return true;
-        }
-    }
-    return false;
-}
-
 /**
  * send a file with the relative path back to client
  * @param sockFD the sock fd
@@ -156,19 +175,6 @@ int send_file(int sockFD, string path){
     string status_code = "200 OK";
     char* resp = build_response(status_code, nullptr, buffer, len);
     return _send_msg(sockFD, resp, len);
-}
-
-int find_delimiter(char* s, int len, int start_pos){
-    for(int i = start_pos; i < len - 1; i ++){
-        if(s[i] == '\r' && s[i + 1] == '\n'){
-            return i;
-        }
-    }
-    return -1;
-}
-
-bool is_get(string data){
-    return data.compare("GET") == 0;
 }
 
 int parse_req(char* data, int size){
