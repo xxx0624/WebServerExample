@@ -28,7 +28,7 @@ const int PARSE_REQ_SUCCESS = 0;
 string req_path;
 
 
-int send_msg(int sockFD, char* msg, int msg_len){
+int _send_msg(int sockFD, char* msg, int msg_len){
     cout << "response size:" << msg_len << endl;
     int nbytes_total = 0;
     while(nbytes_total < msg_len){
@@ -106,12 +106,35 @@ char* build_response(string status_code, vector<string> *headers, char* msg, int
     return res;
 }
 
+bool is_file(string path){
+    for(int i = path.size() - 1; i >= 0; i --){
+        if(path[i] == '/'){
+            return false;
+        }
+        if(path[i] == '.'){
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * send a file with the relative path back to client
  * @param sockFD the sock fd
  * @param path the relative path of this file/directory(may not exist)
  */
 int send_file(int sockFD, string path){
+    if(!is_file(path)){
+        if(path.size() == 0){
+            path = "index.html";
+        } else {
+            if(path[path.size() - 1] == '/'){
+                path += "index.html";
+            } else {
+                path += "/index.html";
+            }
+        }
+    }
     ifstream file("web_root/" + path);
     cout << "file path: " << path << endl;
     int cap = 1000, len = 0;
@@ -132,7 +155,7 @@ int send_file(int sockFD, string path){
     cout << "file size = " << len << endl;
     string status_code = "200 OK";
     char* resp = build_response(status_code, nullptr, buffer, len);
-    return send_msg(sockFD, resp, len);
+    return _send_msg(sockFD, resp, len);
 }
 
 int find_delimiter(char* s, int len, int start_pos){
