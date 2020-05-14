@@ -62,7 +62,7 @@ int parse_req(char* data, int size){
     }
     char* start_line_chs = new char[start_line_pos];
     memcpy(start_line_chs, data, start_line_pos);
-    string start_line = string(start_line);
+    string start_line = string(start_line_chs);
     size_t pos = -1;
     if((pos = start_line.find(" ")) != string::npos){
         // parse method
