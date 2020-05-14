@@ -35,10 +35,12 @@ int send_msg(int sockFD, char* msg, int msg_len){
         int nbytes_last = send(sockFD, msg + nbytes_total, msg_len - nbytes_total, 0);
         if(nbytes_last == -1){
             cerr << "fail to send msg back" << gai_strerror(nbytes_last) << endl;
+            delete msg;
             return nbytes_last;
         }
         nbytes_total += nbytes_last;
     }
+    delete msg;
     return 0;
 }
 
@@ -68,6 +70,8 @@ char* build_response(string status_code, vector<string> *headers, char* msg, int
             }
         }
     }
+    if(headers != nullptr)
+        delete headers;
     for(int j = 0; j < 2; j ++)
     for(int i = 0; i < (int)DELIMITER.size(); i ++){
         if(len == cap){
@@ -95,6 +99,7 @@ char* build_response(string status_code, vector<string> *headers, char* msg, int
         }
         res[len ++] = msg[i];
     }
+    delete msg;
     int size3 = len - size1 - size2;
     cout << "body size = " << size3 << endl;
     msg_len = len;
@@ -108,6 +113,7 @@ char* build_response(string status_code, vector<string> *headers, char* msg, int
  */
 int send_file(int sockFD, string path){
     ifstream file("web_root/" + path);
+    cout << "file path: " << path << endl;
     int cap = 1000, len = 0;
     char* buffer = new char[cap];
     char ch;
@@ -123,6 +129,7 @@ int send_file(int sockFD, string path){
             cap = new_cap;
         }
     }
+    cout << "file size = " << len << endl;
     string status_code = "200 OK";
     char* resp = build_response(status_code, nullptr, buffer, len);
     return send_msg(sockFD, resp, len);
@@ -150,6 +157,7 @@ int parse_req(char* data, int size){
     char* start_line_chs = new char[start_line_pos];
     memcpy(start_line_chs, data, start_line_pos);
     string start_line = string(start_line_chs);
+    delete start_line_chs;
     size_t pos = -1;
     if((pos = start_line.find(" ")) != string::npos){
         // parse method
@@ -178,6 +186,7 @@ int parse_req(char* data, int size){
         memcpy(header_line, data + start_line_pos, head_line_pos - start_line_pos);
         header_line[head_line_pos - start_line_pos] = '\0';
         cout << header_line << endl;
+        delete header_line;
         start_line_pos = head_line_pos + 2;
     }
     // parse body if it exists
@@ -186,13 +195,14 @@ int parse_req(char* data, int size){
         memcpy(body, data + start_line_pos, size - start_line_pos);
         body[size - start_line_pos] = '\0';
         cout << body << endl;
+        delete body;
     }
     return PARSE_REQ_SUCCESS;
 }
 
 
 void process(int cli_sockFD){
-    char buffer[BUFFERSIZE];
+    char *buffer = new char[BUFFERSIZE];
     int req_cap = 1000, req_len = 0;
     char *req = new char[req_cap];
     // read request information
@@ -200,6 +210,8 @@ void process(int cli_sockFD){
         int size = recv(cli_sockFD, buffer, BUFFERSIZE, 0);
         if(size == -1){
             cerr << "recv data failed" << gai_strerror(size) << endl;
+            delete req;
+            delete buffer;
             // send 400
             return ;
         }
@@ -211,29 +223,19 @@ void process(int cli_sockFD){
             char* new_req = new char[new_req_cap];
             memset(new_req, 0, new_req_cap);
             memcpy(new_req, req, req_len);
-            delete[] req;
+            delete req;
             req = new_req;
             req_cap = new_req_cap;
         }
         memcpy(&req[req_len], buffer, size);
-        memset(buffer, 0, sizeof(buffer));
         req_len += size;
         if(parse_req(req, req_len) == PARSE_REQ_SUCCESS){
             break;
         }
     }
-
+    delete req;
+    delete buffer;
     send_file(cli_sockFD, req_path);
-    
-    // stringstream resp;
-    // resp << "HTTP/1.1 200 OK" << DELIMITER;
-    // resp << "Date: Mon, 27 Jul 2009 12:28:53 GMT" << DELIMITER;
-    // resp << "Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT" << DELIMITER;
-    // resp << "Content-Length: 1" << DELIMITER;
-    // resp << "Content-Type: text/html" << DELIMITER;
-    // resp << "Connection: Closed" << DELIMITER << DELIMITER;
-    // resp << "9" << DELIMITER;
-    // send_msg(cli_sockFD, resp.str());
 }
 
 
@@ -250,6 +252,7 @@ int main(int argc, char *argv[]){
     port = strtol(argv[1], &temp, 10);
     if(*temp != '\0'){
         cerr << "port number isn't base of 10" << endl;
+        delete temp;
         return EXIT_FAILURE;
     }
 

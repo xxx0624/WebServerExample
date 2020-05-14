@@ -217,7 +217,7 @@ int main(int argc, char* argv[]){
         if(head_line_pos == start_line_pos){
             start_line_pos += 2;
             // find "\r\n\r\n"
-            if(start_line_pos + 2 < resp_len && resp[start_line_pos] == '\r' && resp[start_line_pos + 1] == '\n'){
+            if(start_line_pos + 1 < resp_len && resp[start_line_pos] == '\r' && resp[start_line_pos + 1] == '\n'){
                 start_line_pos += 2;
             }
             break;
@@ -232,5 +232,7 @@ int main(int argc, char* argv[]){
     char* body = new char[resp_len - start_line_pos];
     memcpy(body, resp + start_line_pos, resp_len - start_line_pos);
     cout.write(body, resp_len - start_line_pos);
+    cerr << "response size = " << resp_len << endl;
+    cerr << "body size = " << resp_len - start_line_pos << endl;
     return 0;
 }
