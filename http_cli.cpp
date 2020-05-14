@@ -232,7 +232,5 @@ int main(int argc, char* argv[]){
     char* body = new char[resp_len - start_line_pos];
     memcpy(body, resp + start_line_pos, resp_len - start_line_pos);
     cout.write(body, resp_len - start_line_pos);
-    cerr << "response size = " << resp_len << endl;
-    cerr << "body size = " << resp_len - start_line_pos << endl;
     return 0;
 }
