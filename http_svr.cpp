@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <bits/stdc++.h> 
+#include <filesystem>
 using namespace std;
 
 
@@ -27,11 +28,11 @@ const int PARSE_REQ_SUCCESS = 0;
 string req_path;
 
 
-int send_msg(int sockFD, string msg){
+int send_msg(int sockFD, char* msg, int msg_len){
+    cout << "response size:" << msg_len << endl;
     int nbytes_total = 0;
-    const char* request = msg.c_str();
-    while(nbytes_total < (int)msg.length()){
-        int nbytes_last = send(sockFD, request + nbytes_total, msg.length() - nbytes_total, 0);
+    while(nbytes_total < msg_len){
+        int nbytes_last = send(sockFD, msg + nbytes_total, msg_len - nbytes_total, 0);
         if(nbytes_last == -1){
             cerr << "fail to send msg back" << gai_strerror(nbytes_last) << endl;
             return nbytes_last;
@@ -39,6 +40,92 @@ int send_msg(int sockFD, string msg){
         nbytes_total += nbytes_last;
     }
     return 0;
+}
+
+char* build_response(string status_code, vector<string> *headers, char* msg, int &msg_len){
+    int cap = 1000, len = 0;
+    char* res = new char[cap];
+    // todo
+    string start_line = "HTTP/1.1 " + status_code + DELIMITER;
+    for(; len < (int)start_line.size(); len ++){
+        res[len] = start_line[len];
+    }
+    int size1 = len;
+    cout << "start line size = " << size1 << endl;
+    if(headers != nullptr){
+        for(string h : *headers){
+            for(int i = 0; i < (int)h.size(); i ++){
+                if(len == cap){
+                    int new_cap = cap + 1000;
+                    char* new_buffer = new char[new_cap];
+                    memset(new_buffer, 0, new_cap);
+                    memcpy(new_buffer, res, len);
+                    delete[] res;
+                    res = new_buffer;
+                    cap = new_cap;
+                }
+                res[len ++] = h[i];
+            }
+        }
+    }
+    for(int j = 0; j < 2; j ++)
+    for(int i = 0; i < (int)DELIMITER.size(); i ++){
+        if(len == cap){
+            int new_cap = cap + 1000;
+            char* new_buffer = new char[new_cap];
+            memset(new_buffer, 0, new_cap);
+            memcpy(new_buffer, res, len);
+            delete[] res;
+            res = new_buffer;
+            cap = new_cap;
+        }
+        res[len ++] = DELIMITER[i];
+    }
+    int size2 = len - size1;
+    cout << "header line size = " << size2 << endl;
+    for(int i = 0; i < msg_len; i ++){
+        if(len == cap){
+            int new_cap = cap + 1000;
+            char* new_buffer = new char[new_cap];
+            memset(new_buffer, 0, new_cap);
+            memcpy(new_buffer, res, len);
+            delete[] res;
+            res = new_buffer;
+            cap = new_cap;
+        }
+        res[len ++] = msg[i];
+    }
+    int size3 = len - size1 - size2;
+    cout << "body size = " << size3 << endl;
+    msg_len = len;
+    return res;
+}
+
+/**
+ * send a file with the relative path back to client
+ * @param sockFD the sock fd
+ * @param path the relative path of this file/directory(may not exist)
+ */
+int send_file(int sockFD, string path){
+    ifstream file("web_root/" + path);
+    int cap = 1000, len = 0;
+    char* buffer = new char[cap];
+    char ch;
+    while(file.get(ch)){
+        buffer[len ++] = ch;
+        if(len == cap){
+            int new_cap = cap + 1000;
+            char* new_buffer = new char[new_cap];
+            memset(new_buffer, 0, new_cap);
+            memcpy(new_buffer, buffer, len);
+            delete[] buffer;
+            buffer = new_buffer;
+            cap = new_cap;
+        }
+    }
+    string status_code = "200 OK";
+    char* resp = build_response(status_code, nullptr, buffer, len);
+    return send_msg(sockFD, resp, len);
 }
 
 int find_delimiter(char* s, int len, int start_pos){
@@ -75,6 +162,7 @@ int parse_req(char* data, int size){
             return NOT_COMPLETE_DATA;
         }
         req_path = start_line.substr(0, pos);
+        cout << req_path << endl;
     }
     // parse header line
     int head_line_pos;
@@ -134,16 +222,18 @@ void process(int cli_sockFD){
             break;
         }
     }
+
+    send_file(cli_sockFD, req_path);
     
-    stringstream resp;
-    resp << "HTTP/1.1 200 OK" << DELIMITER;
-    resp << "Date: Mon, 27 Jul 2009 12:28:53 GMT" << DELIMITER;
-    resp << "Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT" << DELIMITER;
-    resp << "Content-Length: 1" << DELIMITER;
-    resp << "Content-Type: text/html" << DELIMITER;
-    resp << "Connection: Closed" << DELIMITER << DELIMITER;
-    resp << "9" << DELIMITER;
-    send_msg(cli_sockFD, resp.str());
+    // stringstream resp;
+    // resp << "HTTP/1.1 200 OK" << DELIMITER;
+    // resp << "Date: Mon, 27 Jul 2009 12:28:53 GMT" << DELIMITER;
+    // resp << "Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT" << DELIMITER;
+    // resp << "Content-Length: 1" << DELIMITER;
+    // resp << "Content-Type: text/html" << DELIMITER;
+    // resp << "Connection: Closed" << DELIMITER << DELIMITER;
+    // resp << "9" << DELIMITER;
+    // send_msg(cli_sockFD, resp.str());
 }
 
 

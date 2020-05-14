@@ -216,6 +216,10 @@ int main(int argc, char* argv[]){
         }
         if(head_line_pos == start_line_pos){
             start_line_pos += 2;
+            // find "\r\n\r\n"
+            if(start_line_pos + 2 < resp_len && resp[start_line_pos] == '\r' && resp[start_line_pos + 1] == '\n'){
+                start_line_pos += 2;
+            }
             break;
         }
         char* header_line = new char[head_line_pos - start_line_pos + 1];

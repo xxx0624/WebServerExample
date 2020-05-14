@@ -1,3 +1,7 @@
 *dSYM/
 http_cli
-http_srv
+http_svr
+*.png
+*.jpg
+*.jpeg
+*.txt
