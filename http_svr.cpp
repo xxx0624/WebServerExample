@@ -19,6 +19,12 @@ using namespace std;
 const int MAX_CONNS = 10;
 const int BUFFERSIZE = 100;
 const string DELIMITER = "\r\n";
+// following consts are used in parse_req function denoting the status of parsing
+const int UNSUPPORTED_METHOD = -100;
+const int NOT_COMPLETE_DATA = -101;
+const int PARSE_REQ_SUCCESS = 0;
+// store the path in some req, if it exists
+string req_path;
 
 
 int send_msg(int sockFD, string msg){
@@ -44,25 +50,37 @@ int find_delimiter(char* s, int len, int start_pos){
     return -1;
 }
 
-bool is_get(char* data, int size){
-    return size == 3 && string(data).compare("GET") == 0;
+bool is_get(string data){
+    return data.compare("GET") == 0;
 }
 
 int parse_req(char* data, int size){
     // parse start line
     int start_line_pos = find_delimiter(data, size, 0);
     if(start_line_pos == -1){
-        return -1;// something wrong in the start line
+        return NOT_COMPLETE_DATA;// something wrong in the start line
     }
-    char* start_line = new char[start_line_pos + 1];
-    memcpy(start_line, data, start_line_pos);
-    start_line[start_line_pos] = '\0';
-    cout << start_line << endl;
+    char* start_line_chs = new char[start_line_pos];
+    memcpy(start_line_chs, data, start_line_pos);
+    string start_line = string(start_line);
+    size_t pos = -1;
+    if((pos = start_line.find(" ")) != string::npos){
+        // parse method
+        if(!is_get(start_line.substr(0, pos))){
+            return UNSUPPORTED_METHOD;// not supported method, only GET is allowed
+        }
+        // parse path
+        start_line.erase(0, pos + 1);
+        if((pos=start_line.find(" ")) == string::npos){
+            return NOT_COMPLETE_DATA;
+        }
+        req_path = start_line.substr(0, pos);
+    }
     // parse header line
     int head_line_pos;
     while((head_line_pos = find_delimiter(data, size, start_line_pos)) != -1){
         if(head_line_pos == -1){
-            return -2;// something wrong in head lines
+            return NOT_COMPLETE_DATA;// something wrong in head lines
         }
         if(head_line_pos == start_line_pos){
             start_line_pos += 2;
@@ -81,7 +99,7 @@ int parse_req(char* data, int size){
         body[size - start_line_pos] = '\0';
         cout << body << endl;
     }
-    return 0;
+    return PARSE_REQ_SUCCESS;
 }
 
 
@@ -112,7 +130,7 @@ void process(int cli_sockFD){
         memcpy(&req[req_len], buffer, size);
         memset(buffer, 0, sizeof(buffer));
         req_len += size;
-        if(parse_req(req, req_len) == 0){
+        if(parse_req(req, req_len) == PARSE_REQ_SUCCESS){
             break;
         }
     }
