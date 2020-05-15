@@ -20,12 +20,14 @@ using namespace std;
 const int MAX_CONNS = 10;
 const int BUFFERSIZE = 100;
 const string DELIMITER = "\r\n";
+
 // following consts are used in parse_req function denoting the status of parsing
-const int UNSUPPORTED_METHOD = -100;
-const int NOT_COMPLETE_DATA = -101;
+const int NOT_COMPLETE_DATA = -1;
 const int PARSE_REQ_SUCCESS = 0;
-// store the path in some req, if it exists
-string req_path;
+
+string req_path; // store the path in some req, if it exists
+int method_typ; // 0 for unknown type(still waiting for being assigned), 1 for GET, -1 for other methods type
+enum METHOD_TYPE{GET = 1, UNKNOWN = 0, OTHERS = -1};
 
 
 bool is_file(string path){
@@ -143,6 +145,7 @@ char* build_response(string status_code, vector<string> *headers, char* msg, int
  * @param path the relative path of this file/directory(may not exist)
  */
 int send_file(int sockFD, string path){
+    // check if the thing here specified by path is a file
     if(!is_file(path)){
         if(path.size() == 0){
             path = "index.html";
@@ -153,6 +156,11 @@ int send_file(int sockFD, string path){
                 path += "/index.html";
             }
         }
+    }
+    if(path.find("..") != string::npos){
+        // send bad request
+        // todo
+        return -1;
     }
     ifstream file("web_root/" + path);
     cout << "file path: " << path << endl;
@@ -171,10 +179,12 @@ int send_file(int sockFD, string path){
             cap = new_cap;
         }
     }
-    cout << "file size = " << len << endl;
     string status_code = "200 OK";
     char* resp = build_response(status_code, nullptr, buffer, len);
-    return _send_msg(sockFD, resp, len);
+    char* msg = new char[len];
+    memcpy(msg, resp, len);
+    delete resp;
+    return _send_msg(sockFD, msg, len);
 }
 
 int parse_req(char* data, int size){
@@ -191,7 +201,9 @@ int parse_req(char* data, int size){
     if((pos = start_line.find(" ")) != string::npos){
         // parse method
         if(!is_get(start_line.substr(0, pos))){
-            return UNSUPPORTED_METHOD;// not supported method, only GET is allowed
+            method_typ = OTHERS;// not supported method, only GET is allowed
+        } else {
+            method_typ = GET;
         }
         // parse path
         start_line.erase(0, pos + 1);
@@ -234,7 +246,10 @@ void process(int cli_sockFD){
     char *buffer = new char[BUFFERSIZE];
     int req_cap = 1000, req_len = 0;
     char *req = new char[req_cap];
-    // read request information
+    // init variables for this request
+    method_typ = UNKNOWN;
+    req_path = ""; 
+    // read request information(Given the format of the request is correct)
     while(true){
         int size = recv(cli_sockFD, buffer, BUFFERSIZE, 0);
         if(size == -1){
@@ -264,7 +279,12 @@ void process(int cli_sockFD){
     }
     delete req;
     delete buffer;
-    send_file(cli_sockFD, req_path);
+    if(method_typ == GET){
+        send_file(cli_sockFD, req_path);
+    } else {
+        // todo
+        //send 501
+    }
 }
 
 
