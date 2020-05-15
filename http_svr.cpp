@@ -82,59 +82,80 @@ int _send_msg(int sockFD, char* msg, int msg_len){
     return 0;
 }
 
-void _append_chars_to_t(char* s, int len_s, char * t, int &len_t, int &cap_t){
-    for(int i = 0; i < len_s; i ++){
-        if(len_t == cap_t){
-            int new_cap = cap_t + 1000;
-            char* new_buffer = new char[new_cap];
-            memset(new_buffer, 0, new_cap);
-            memcpy(new_buffer, t, len_t);
-            t = new_buffer;
-            cap_t = new_cap;
-        }
-        t[len_t ++] = s[i];
-    }
-}
-
-void _append_string_to_t(string s, char * t, int &len_t, int &cap_t){
-    char* chs = new char[s.length()];
-    memcpy(chs, s.c_str(), s.length());
-    _append_chars_to_t(chs, s.length(), t, len_t, cap_t);
-    // for(int i = 0; i < (int)s.length(); i ++){
-    //     if(len_t == cap_t){
-    //         int new_cap = cap_t + 1000;
-    //         char* new_buffer = new char[new_cap];
-    //         memset(new_buffer, 0, new_cap);
-    //         memcpy(new_buffer, t, len_t);
-    //         t = new_buffer;
-    //         cap_t = new_cap;
-    //     }
-    //     t[len_t ++] = s[i];
-    // }
-}
-
 char* _build_response(string status_code, vector<string> *headers, char* msg, int &msg_len){
     int cap = 1000, len = 0;
     char* res = new char[cap];
+    //build start line
     string start_line = "HTTP/1.1 " + status_code + DELIMITER;
-    _append_string_to_t(start_line, res, len, cap);
+    for(int i = 0; i < (int)start_line.length(); i ++){
+        if(len == cap){
+            int new_cap = cap + 1000;
+            char* new_buffer = new char[new_cap];
+            memcpy(new_buffer, res, len);
+            delete res;
+            res = new_buffer;
+            cap = new_cap;
+        }
+        res[len ++] = start_line[i];
+    }
     int size1 = len;
     cout << "start line size = " << size1 << endl;
-    if(headers != nullptr){
-        for(string h : *headers){
-            _append_string_to_t(h, res, len, cap);
+    // build headers
+    if(headers == nullptr || headers->size() == 0){
+        for(int i = 0; i < (int)DELIMITER.length(); i ++){
+            if(len == cap){
+                int new_cap = cap + 1000;
+                char* new_buffer = new char[new_cap];
+                memcpy(new_buffer, res, len);
+                delete res;
+                res = new_buffer;
+                cap = new_cap;
+            }
+            res[len ++] = DELIMITER[i];
         }
-        if(headers->size() == 0){
-            _append_string_to_t(DELIMITER, res, len, cap);
-        }
-        delete headers;
     } else {
-        _append_string_to_t(DELIMITER, res, len, cap);
+        for(string h : *headers){
+            for(int i = 0; i < (int)h.length(); i ++){
+                if(len == cap){
+                    int new_cap = cap + 1000;
+                    char* new_buffer = new char[new_cap];
+                    memcpy(new_buffer, res, len);
+                    delete res;
+                    res = new_buffer;
+                    cap = new_cap;
+                }
+                res[len ++] = h[i];
+            }
+        }
     }
-    _append_string_to_t(DELIMITER, res, len, cap);
+    if(headers != nullptr){
+        delete headers;
+    }
+    for(int i = 0; i < (int)DELIMITER.length(); i ++){
+        if(len == cap){
+            int new_cap = cap + 1000;
+            char* new_buffer = new char[new_cap];
+            memcpy(new_buffer, res, len);
+            delete res;
+            res = new_buffer;
+            cap = new_cap;
+        }
+        res[len ++] = DELIMITER[i];
+    }
     int size2 = len - size1;
     cout << "header line size = " << size2 << endl;
-    _append_chars_to_t(msg, msg_len, res, len, cap);
+    // build body
+    for(int i = 0; i < msg_len; i ++){
+        if(len == cap){
+            int new_cap = cap + 1000;
+            char* new_buffer = new char[new_cap];
+            memcpy(new_buffer, res, len);
+            delete res;
+            res = new_buffer;
+            cap = new_cap;
+        }
+        res[len ++] = msg[i];
+    }
     int size3 = len - size1 - size2;
     cout << "body size = " << size3 << endl;
     msg_len = len;
@@ -209,9 +230,8 @@ int send_file(int sockFD, string path){
         if(len == cap){
             int new_cap = cap + 1000;
             char* new_buffer = new char[new_cap];
-            memset(new_buffer, 0, new_cap);
             memcpy(new_buffer, buffer, len);
-            delete[] buffer;
+            delete buffer;
             buffer = new_buffer;
             cap = new_cap;
         }
