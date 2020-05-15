@@ -28,6 +28,11 @@ const int PARSE_REQ_SUCCESS = 0;
 string req_path; // store the path in some req, if it exists
 int method_typ; // 0 for unknown type(still waiting for being assigned), 1 for GET, -1 for other methods type
 enum METHOD_TYPE{GET = 1, UNKNOWN = 0, OTHERS = -1};
+const string OK = "200 OK";
+const string BAD_REQUEST = "400 Bad Request";
+const string NOT_IMPLEMENTED = "501 Not Implemented";
+const string NOT_FOUND = "404 Not Found";
+const string INTERNAL_ERROR = "500 Internal Server Error";
 
 
 bool is_file(string path){
@@ -77,66 +82,74 @@ int _send_msg(int sockFD, char* msg, int msg_len){
     return 0;
 }
 
-char* build_response(string status_code, vector<string> *headers, char* msg, int &msg_len){
+void _append_chars_to_t(char* s, int len_s, char * t, int &len_t, int &cap_t){
+    for(int i = 0; i < len_s; i ++){
+        if(len_t == cap_t){
+            int new_cap = cap_t + 1000;
+            char* new_buffer = new char[new_cap];
+            memset(new_buffer, 0, new_cap);
+            memcpy(new_buffer, t, len_t);
+            delete t;
+            t = new_buffer;
+            cap_t = new_cap;
+        }
+        t[len_t ++] = s[i];
+    }
+}
+
+void _append_string_to_t(string s, char * t, int &len_t, int &cap_t){
+    // char* chs = new char[s.length()];
+    // memcpy(chs, s.c_str(), s.length());
+    // _append_chars_to_t(chs, s.length(), t, len_t, cap_t);
+    for(int i = 0; i < (int)s.length(); i ++){
+        if(len_t == cap_t){
+            int new_cap = cap_t + 1000;
+            char* new_buffer = new char[new_cap];
+            memset(new_buffer, 0, new_cap);
+            memcpy(new_buffer, t, len_t);
+            delete t;
+            t = new_buffer;
+            cap_t = new_cap;
+        }
+        t[len_t ++] = s[i];
+    }
+}
+
+char* _build_response(string status_code, vector<string> *headers, char* msg, int &msg_len){
     int cap = 1000, len = 0;
     char* res = new char[cap];
-    // todo
     string start_line = "HTTP/1.1 " + status_code + DELIMITER;
-    for(; len < (int)start_line.size(); len ++){
-        res[len] = start_line[len];
-    }
+    _append_string_to_t(start_line, res, len, cap);
     int size1 = len;
     cout << "start line size = " << size1 << endl;
     if(headers != nullptr){
         for(string h : *headers){
-            for(int i = 0; i < (int)h.size(); i ++){
-                if(len == cap){
-                    int new_cap = cap + 1000;
-                    char* new_buffer = new char[new_cap];
-                    memset(new_buffer, 0, new_cap);
-                    memcpy(new_buffer, res, len);
-                    delete[] res;
-                    res = new_buffer;
-                    cap = new_cap;
-                }
-                res[len ++] = h[i];
-            }
+            _append_string_to_t(h, res, len, cap);
+        }
+        if(headers->size() == 0){
+            _append_string_to_t(DELIMITER, res, len, cap);
         }
     }
     if(headers != nullptr)
         delete headers;
-    for(int j = 0; j < 2; j ++)
-    for(int i = 0; i < (int)DELIMITER.size(); i ++){
-        if(len == cap){
-            int new_cap = cap + 1000;
-            char* new_buffer = new char[new_cap];
-            memset(new_buffer, 0, new_cap);
-            memcpy(new_buffer, res, len);
-            delete[] res;
-            res = new_buffer;
-            cap = new_cap;
-        }
-        res[len ++] = DELIMITER[i];
-    }
+    _append_string_to_t(DELIMITER, res, len, cap);
     int size2 = len - size1;
     cout << "header line size = " << size2 << endl;
-    for(int i = 0; i < msg_len; i ++){
-        if(len == cap){
-            int new_cap = cap + 1000;
-            char* new_buffer = new char[new_cap];
-            memset(new_buffer, 0, new_cap);
-            memcpy(new_buffer, res, len);
-            delete[] res;
-            res = new_buffer;
-            cap = new_cap;
-        }
-        res[len ++] = msg[i];
-    }
-    delete msg;
+    _append_chars_to_t(msg, msg_len, res, len, cap);
     int size3 = len - size1 - size2;
     cout << "body size = " << size3 << endl;
     msg_len = len;
     return res;
+}
+
+int send_msg(int sockFD, string status_code){
+    stringstream ss;
+    ss << "HTTP/1.1 " << status_code << DELIMITER;
+    ss << "Connection: close" << DELIMITER << DELIMITER;
+    string s = ss.str();
+    char* msg = new char[s.length()];
+    memcpy(msg, s.c_str(), s.length());
+    return _send_msg(sockFD, msg,s.length());
 }
 
 /**
@@ -158,8 +171,7 @@ int send_file(int sockFD, string path){
         }
     }
     if(path.find("..") != string::npos){
-        // send bad request
-        // todo
+        send_msg(sockFD, BAD_REQUEST);
         return -1;
     }
     ifstream file("web_root/" + path);
@@ -179,8 +191,7 @@ int send_file(int sockFD, string path){
             cap = new_cap;
         }
     }
-    string status_code = "200 OK";
-    char* resp = build_response(status_code, nullptr, buffer, len);
+    char* resp = _build_response(OK, nullptr, buffer, len);
     char* msg = new char[len];
     memcpy(msg, resp, len);
     delete resp;
@@ -256,7 +267,7 @@ void process(int cli_sockFD){
             cerr << "recv data failed" << gai_strerror(size) << endl;
             delete req;
             delete buffer;
-            // send 400
+            send_msg(cli_sockFD, INTERNAL_ERROR);
             return ;
         }
         if(size == 0){
@@ -282,8 +293,7 @@ void process(int cli_sockFD){
     if(method_typ == GET){
         send_file(cli_sockFD, req_path);
     } else {
-        // todo
-        //send 501
+        send_msg(cli_sockFD, NOT_IMPLEMENTED);
     }
 }
 
