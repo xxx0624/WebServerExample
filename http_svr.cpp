@@ -89,7 +89,6 @@ void _append_chars_to_t(char* s, int len_s, char * t, int &len_t, int &cap_t){
             char* new_buffer = new char[new_cap];
             memset(new_buffer, 0, new_cap);
             memcpy(new_buffer, t, len_t);
-            delete t;
             t = new_buffer;
             cap_t = new_cap;
         }
@@ -98,21 +97,20 @@ void _append_chars_to_t(char* s, int len_s, char * t, int &len_t, int &cap_t){
 }
 
 void _append_string_to_t(string s, char * t, int &len_t, int &cap_t){
-    // char* chs = new char[s.length()];
-    // memcpy(chs, s.c_str(), s.length());
-    // _append_chars_to_t(chs, s.length(), t, len_t, cap_t);
-    for(int i = 0; i < (int)s.length(); i ++){
-        if(len_t == cap_t){
-            int new_cap = cap_t + 1000;
-            char* new_buffer = new char[new_cap];
-            memset(new_buffer, 0, new_cap);
-            memcpy(new_buffer, t, len_t);
-            delete t;
-            t = new_buffer;
-            cap_t = new_cap;
-        }
-        t[len_t ++] = s[i];
-    }
+    char* chs = new char[s.length()];
+    memcpy(chs, s.c_str(), s.length());
+    _append_chars_to_t(chs, s.length(), t, len_t, cap_t);
+    // for(int i = 0; i < (int)s.length(); i ++){
+    //     if(len_t == cap_t){
+    //         int new_cap = cap_t + 1000;
+    //         char* new_buffer = new char[new_cap];
+    //         memset(new_buffer, 0, new_cap);
+    //         memcpy(new_buffer, t, len_t);
+    //         t = new_buffer;
+    //         cap_t = new_cap;
+    //     }
+    //     t[len_t ++] = s[i];
+    // }
 }
 
 char* _build_response(string status_code, vector<string> *headers, char* msg, int &msg_len){
@@ -129,9 +127,10 @@ char* _build_response(string status_code, vector<string> *headers, char* msg, in
         if(headers->size() == 0){
             _append_string_to_t(DELIMITER, res, len, cap);
         }
-    }
-    if(headers != nullptr)
         delete headers;
+    } else {
+        _append_string_to_t(DELIMITER, res, len, cap);
+    }
     _append_string_to_t(DELIMITER, res, len, cap);
     int size2 = len - size1;
     cout << "header line size = " << size2 << endl;
@@ -142,6 +141,32 @@ char* _build_response(string status_code, vector<string> *headers, char* msg, in
     return res;
 }
 
+vector<string>* _build_headers(string path){
+    vector<string> *headers = new vector<string>;
+    headers->push_back("Connection: close" + DELIMITER);
+    char buf[100];
+    time_t now = time(0);
+    struct tm tm = *gmtime(&now);
+    strftime(buf, sizeof buf, "%a, %d %b %Y %H:%M:%S %Z", &tm);
+    headers->push_back("Date: " + string(buf) + DELIMITER);
+    if(path.find(".txt") != string::npos){
+        headers->push_back("Content-Type: text/plain" + DELIMITER);
+    } else if(path.find(".html") != string::npos) {
+        headers->push_back("Content-Type: text/html" + DELIMITER);
+    } else if(path.find(".htm") != string::npos) {
+        headers->push_back("Content-Type: text/htm" + DELIMITER);
+    } else if(path.find(".css") != string::npos) {
+        headers->push_back("Content-Type: text/css" + DELIMITER);
+    } else if(path.find(".jpg") != string::npos || path.find(".jpeg") != string::npos) {
+        headers->push_back("Content-Type: image/jpeg" + DELIMITER);
+    } else if(path.find(".png") != string::npos) {
+        headers->push_back("Content-Type: image/png" + DELIMITER);
+    } else {
+        headers->push_back("Content-Type: text/plain" + DELIMITER);// default
+    }
+    return headers;
+}
+
 int send_msg(int sockFD, string status_code){
     stringstream ss;
     ss << "HTTP/1.1 " << status_code << DELIMITER;
@@ -149,7 +174,7 @@ int send_msg(int sockFD, string status_code){
     string s = ss.str();
     char* msg = new char[s.length()];
     memcpy(msg, s.c_str(), s.length());
-    return _send_msg(sockFD, msg,s.length());
+    return _send_msg(sockFD, msg, s.length());
 }
 
 /**
@@ -191,7 +216,7 @@ int send_file(int sockFD, string path){
             cap = new_cap;
         }
     }
-    char* resp = _build_response(OK, nullptr, buffer, len);
+    char* resp = _build_response(OK, _build_headers(path), buffer, len);
     char* msg = new char[len];
     memcpy(msg, resp, len);
     delete resp;
@@ -208,6 +233,7 @@ int parse_req(char* data, int size){
     memcpy(start_line_chs, data, start_line_pos);
     string start_line = string(start_line_chs);
     delete start_line_chs;
+    start_line_pos += 2;
     size_t pos = -1;
     if((pos = start_line.find(" ")) != string::npos){
         // parse method
@@ -222,7 +248,6 @@ int parse_req(char* data, int size){
             return NOT_COMPLETE_DATA;
         }
         req_path = start_line.substr(0, pos);
-        cout << req_path << endl;
     }
     // parse header line
     int head_line_pos;
