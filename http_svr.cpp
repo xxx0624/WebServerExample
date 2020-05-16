@@ -345,7 +345,7 @@ void process(int cli_sockFD){
 
 int main(int argc, char *argv[]){
     int port, sockFD, error;
-    char* temp;
+    char* temp = nullptr;
     struct sockaddr_in serv_addr;
 
     if(argc != 2){
@@ -354,7 +354,7 @@ int main(int argc, char *argv[]){
     }
 
     port = strtol(argv[1], &temp, 10);
-    if(*temp != '\0'){
+    if(temp != nullptr && *temp != '\0'){
         cerr << "port number isn't base of 10" << endl;
         delete temp;
         return EXIT_FAILURE;
@@ -386,9 +386,7 @@ int main(int argc, char *argv[]){
 
     // keep listening
     while(true){
-        struct sockaddr_in cli_addr;
-        unsigned int sizelen = sizeof(cli_addr);
-        int cli_sockFD = accept(sockFD, (struct sockaddr*)&cli_addr, &sizelen);
+        int cli_sockFD = accept(sockFD, NULL, NULL);
         if(cli_sockFD < 0){
             cerr << "fail to accept the client, " << gai_strerror(error) << endl;
             continue;
@@ -396,4 +394,6 @@ int main(int argc, char *argv[]){
         process(cli_sockFD);
         close(cli_sockFD);
     }
+    close(sockFD);
+    return 0;
 }
