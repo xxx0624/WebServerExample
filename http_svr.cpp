@@ -314,7 +314,7 @@ int parse_req(char* data, int size){
         char* header_line = new char[head_line_pos - start_line_pos + 1];
         memcpy(header_line, data + start_line_pos, head_line_pos - start_line_pos);
         header_line[head_line_pos - start_line_pos] = '\0';
-        cout << header_line << endl;
+        cout << "(header from client):" << header_line << endl;
         delete header_line;
         start_line_pos = head_line_pos + 2;
     }
@@ -323,7 +323,7 @@ int parse_req(char* data, int size){
         char* body = new char[size - start_line_pos + 1];
         memcpy(body, data + start_line_pos, size - start_line_pos);
         body[size - start_line_pos] = '\0';
-        cout << body << endl;
+        cout << "(body from client):" << body << endl;
         delete body;
     }
     return PARSE_REQ_SUCCESS;
