@@ -7,10 +7,12 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <time.h>
 #include <arpa/inet.h>
-#include <sys/wait.h>
 #include <signal.h>
 #include <bits/stdc++.h> 
 #include <filesystem>
@@ -80,6 +82,11 @@ int _send_msg(int sockFD, char* msg, int msg_len){
     }
     delete msg;
     return 0;
+}
+
+bool file_exist(string path) {
+    struct stat buffer;   
+    return (stat (path.c_str(), &buffer) == 0); 
 }
 
 char* _build_response(string status_code, vector<string> *headers, char* msg, int &msg_len){
@@ -162,14 +169,17 @@ char* _build_response(string status_code, vector<string> *headers, char* msg, in
     return res;
 }
 
+string _convert_time_to_string(time_t t){
+    char buf[100];
+    struct tm tm = *gmtime(&t);
+    strftime(buf, sizeof buf, "%a, %d %b %Y %H:%M:%S %Z", &tm);
+    return string(buf);
+}
+
 vector<string>* _build_headers(string path){
     vector<string> *headers = new vector<string>;
     headers->push_back("Connection: close" + DELIMITER);
-    char buf[100];
-    time_t now = time(0);
-    struct tm tm = *gmtime(&now);
-    strftime(buf, sizeof buf, "%a, %d %b %Y %H:%M:%S %Z", &tm);
-    headers->push_back("Date: " + string(buf) + DELIMITER);
+    headers->push_back("Date: " + _convert_time_to_string(time(0)) + DELIMITER);
     if(path.find(".txt") != string::npos){
         headers->push_back("Content-Type: text/plain" + DELIMITER);
     } else if(path.find(".html") != string::npos) {
@@ -184,6 +194,12 @@ vector<string>* _build_headers(string path){
         headers->push_back("Content-Type: image/png" + DELIMITER);
     } else {
         headers->push_back("Content-Type: text/plain" + DELIMITER);// default
+    }
+    if(file_exist(path)){
+        struct stat sb;
+        stat(path.c_str(), &sb);
+        headers->push_back("Last-Modified: " + _convert_time_to_string(sb.st_mtime) + DELIMITER);
+        headers->push_back("Content-Length: " + to_string(sb.st_size) + DELIMITER);
     }
     return headers;
 }
@@ -204,24 +220,40 @@ int send_msg(int sockFD, string status_code){
  * @param path the relative path of this file/directory(may not exist)
  */
 int send_file(int sockFD, string path){
+    // append path to web_root/
+    if(path.length() > 0){
+        if(path[0] == '/'){
+            path = "web_root" + path;
+        } else {
+            path = "web_root/" + path;
+        }
+    } else {
+        path = "web_root/index.html";
+    }
+    
     // check if the thing here specified by path is a file
     if(!is_file(path)){
-        if(path.size() == 0){
-            path = "index.html";
+        if(path[path.size() - 1] == '/'){
+            path += "index.html";
         } else {
-            if(path[path.size() - 1] == '/'){
-                path += "index.html";
-            } else {
-                path += "/index.html";
-            }
+            path += "/index.html";
         }
     }
+    cout << "file path: " << path << endl;
+
     if(path.find("..") != string::npos){
         send_msg(sockFD, BAD_REQUEST);
         return -1;
     }
-    ifstream file("web_root/" + path);
-    cout << "file path: " << path << endl;
+
+    // check if file exists
+    if(!file_exist(path)){
+        send_msg(sockFD, NOT_FOUND);
+        return -1;
+    }
+
+    // load file into memory
+    ifstream file(path);
     int cap = 1000, len = 0;
     char* buffer = new char[cap];
     char ch;
@@ -393,6 +425,7 @@ int main(int argc, char *argv[]){
         }
         process(cli_sockFD);
         close(cli_sockFD);
+        cout << endl;
     }
     close(sockFD);
     return 0;
